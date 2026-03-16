@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Edit Model Portfolio{% endblock %}
+
+{% block content %}
+
+<h2 class="mb-1">Edit Model Portfolio</h2>
+<p class="text-muted mb-4">
+  Adjust target allocation percentages for the <em>Wealth Builder 2025</em> plan.
+  Percentages <strong>must add up to exactly 100%</strong>.
+</p>
+
+{% if error %}
+<div class="alert alert-danger d-flex align-items-center gap-2" role="alert">
+  ⚠️ <strong>{{ error }}</strong>
+</div>
+{% endif %}
+
+<div class="card shadow-sm border-0" style="max-width: 680px;">
+  <div class="card-header bg-white fw-semibold fs-5">Fund Allocations</div>
+  <div class="card-body">
+    <form method="POST" action="/edit-plan">
+      <table class="table align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>Fund ID</th>
+            <th>Fund Name</th>
+            <th>Asset Class</th>
+            <th style="width:160px">Target %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fund in model_funds %}
+          <tr>
+            <td><code>{{ fund.fund_id }}</code></td>
+            <td>{{ fund.fund_name }}</td>
+            <td><small class="text-muted">{{ fund.asset_class }}</small></td>
+            <td>
+              <div class="input-group">
+                <input
+                  type="number"
+                  class="form-control"
+                  name="alloc_{{ fund.fund_id }}"
+                  value="{{ fund.allocation_pct }}"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  required
+                />
+                <span class="input-group-text">%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr class="table-light fw-bold">
+            <td colspan="3">Total</td>
+            <td>
+              <div id="total-display" class="ps-2 small">—</div>
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="d-flex gap-2 mt-2">
+        <button type="submit" class="btn btn-primary">
+          ✅ Save &amp; Recalculate
+        </button>
+        <a href="/" class="btn btn-outline-secondary">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Live running total so user knows before they submit -->
+<script>
+  function updateTotal() {
+    const inputs = document.querySelectorAll('input[type="number"]');
+    let total = 0;
+    inputs.forEach(inp => { total += parseFloat(inp.value) || 0; });
+    const rounded = Math.round(total * 100) / 100;
+    const display = document.getElementById('total-display');
+    if (Math.abs(rounded - 100) < 0.01) {
+      display.innerHTML = '<span class="text-success fw-bold">' + rounded + '% ✓</span>';
+    } else {
+      display.innerHTML = '<span class="text-danger fw-bold">' + rounded + '% (must be 100%)</span>';
+    }
+  }
+  document.querySelectorAll('input[type="number"]').forEach(inp => {
+    inp.addEventListener('input', updateTotal);
+  });
+  updateTotal();
+</script>
+
+{% endblock %}
