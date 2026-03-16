@@ -1,0 +1,75 @@
+/* ── Portfolio Rebalancer – Custom Styles ──────────────────────────── */
+
+body {
+  background-color: #f8f9fa;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ── Summary cards ── */
+.summary-card {
+  background: #ffffff;
+  border-radius: 12px;
+}
+
+.summary-label {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.summary-amount {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+/* ── Table row colouring ── */
+tr.row-buy {
+  background-color: #f0fff4 !important;   /* very light green */
+}
+
+tr.row-sell {
+  background-color: #fff5f5 !important;   /* very light red */
+}
+
+tr.row-review {
+  background-color: #fffbeb !important;   /* very light yellow */
+}
+
+/* ── Navbar tweaks ── */
+.navbar-brand {
+  font-size: 1.15rem;
+}
+
+/* ── Main card ── */
+.card {
+  border-radius: 10px;
+}
+
+.card-header {
+  border-radius: 10px 10px 0 0 !important;
+  padding: 1rem 1.25rem;
+}
+
+/* ── Table ── */
+th {
+  font-size: 0.83rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #495057;
+}
+
+code {
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  color: #c0392b;
+}
+
+/* ── Footer ── */
+footer {
+  font-size: 0.82rem;
+  color: #adb5bd;
+}
