@@ -1,75 +1,31 @@
-/* ── Portfolio Rebalancer – Custom Styles ──────────────────────────── */
+body { background-color: #f8f9fa; font-family: 'Segoe UI', system-ui, sans-serif; }
 
-body {
-  background-color: #f8f9fa;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+/* Summary cards */
+.summary-card { background: #fff; border-radius: 12px; }
+.summary-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: #6c757d; margin-bottom: 4px; }
+.summary-amount { font-size: 1.45rem; font-weight: 700; }
+
+/* Client cards on home page */
+.client-card { border-radius: 14px; transition: transform 0.15s, box-shadow 0.15s; }
+.client-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
+.client-avatar {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: linear-gradient(135deg, #0d6efd, #6610f2);
+  color: white; font-size: 1.8rem; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
 }
 
-/* ── Summary cards ── */
-.summary-card {
-  background: #ffffff;
-  border-radius: 12px;
-}
+/* Table row colouring */
+tr.row-buy    { background-color: #f0fff4 !important; }
+tr.row-sell   { background-color: #fff5f5 !important; }
+tr.row-review { background-color: #fffbeb !important; }
 
-.summary-label {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6c757d;
-  margin-bottom: 4px;
-}
+/* Table headings */
+th { font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; color: #495057; }
 
-.summary-amount {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
+/* Code chips */
+code { background: #e9ecef; padding: 2px 6px; border-radius: 4px; font-size: 0.88rem; color: #c0392b; }
 
-/* ── Table row colouring ── */
-tr.row-buy {
-  background-color: #f0fff4 !important;   /* very light green */
-}
-
-tr.row-sell {
-  background-color: #fff5f5 !important;   /* very light red */
-}
-
-tr.row-review {
-  background-color: #fffbeb !important;   /* very light yellow */
-}
-
-/* ── Navbar tweaks ── */
-.navbar-brand {
-  font-size: 1.15rem;
-}
-
-/* ── Main card ── */
-.card {
-  border-radius: 10px;
-}
-
-.card-header {
-  border-radius: 10px 10px 0 0 !important;
-  padding: 1rem 1.25rem;
-}
-
-/* ── Table ── */
-th {
-  font-size: 0.83rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #495057;
-}
-
-code {
-  background: #e9ecef;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.88rem;
-  color: #c0392b;
-}
-
-/* ── Footer ── */
-footer {
-  font-size: 0.82rem;
-  color: #adb5bd;
-}
+.card { border-radius: 10px; }
+.card-header { border-radius: 10px 10px 0 0 !important; padding: 1rem 1.25rem; }
+footer { font-size: 0.82rem; }
