@@ -1,10 +1,13 @@
 {% extends "base.html" %}
-{% block title %}History - {{ client_name }}{% endblock %}
+{% block title %}History – {{ client.client_name }}{% endblock %}
 
 {% block content %}
 
 <h2 class="mb-1">Rebalancing History</h2>
-<p class="text-muted mb-4">Client: <strong>{{ client_name }}</strong></p>
+<p class="text-muted mb-4">
+  Client: <strong>{{ client.client_name }}</strong>
+  <span class="badge bg-secondary ms-1">{{ client.client_id }}</span>
+</p>
 
 {% if sessions %}
 <div class="card shadow-sm border-0">
@@ -30,28 +33,19 @@
             <td><strong>#{{ s.session_id }}</strong></td>
             <td>{{ s.created_at }}</td>
             <td class="text-end">₹{{ "{:,.0f}".format(s.portfolio_value) }}</td>
-            <td class="text-end text-success fw-semibold">
-              ₹{{ "{:,.0f}".format(s.total_to_buy) }}
-            </td>
-            <td class="text-end text-danger fw-semibold">
-              ₹{{ "{:,.0f}".format(s.total_to_sell) }}
-            </td>
+            <td class="text-end text-success fw-semibold">₹{{ "{:,.0f}".format(s.total_to_buy) }}</td>
+            <td class="text-end text-danger fw-semibold">₹{{ "{:,.0f}".format(s.total_to_sell) }}</td>
             <td class="text-end {% if s.net_cash_needed > 0 %}text-warning fw-semibold{% endif %}">
               ₹{{ "{:,.0f}".format(s.net_cash_needed) }}
             </td>
             <td class="text-center">
-              {% if s.status == 'PENDING' %}
-                <span class="badge bg-primary">PENDING</span>
-              {% elif s.status == 'APPLIED' %}
-                <span class="badge bg-success">APPLIED</span>
-              {% elif s.status == 'DISMISSED' %}
-                <span class="badge bg-secondary">DISMISSED</span>
-              {% else %}
-                <span class="badge bg-light text-dark">{{ s.status }}</span>
-              {% endif %}
+              {% if s.status == 'PENDING' %}<span class="badge bg-primary">PENDING</span>
+              {% elif s.status == 'APPLIED' %}<span class="badge bg-success">APPLIED</span>
+              {% elif s.status == 'DISMISSED' %}<span class="badge bg-secondary">DISMISSED</span>
+              {% else %}<span class="badge bg-light text-dark">{{ s.status }}</span>{% endif %}
             </td>
             <td class="text-center">
-              <a href="/history/{{ s.session_id }}"
+              <a href="/client/{{ client.client_id }}/history/{{ s.session_id }}"
                  class="btn btn-sm btn-outline-secondary">View →</a>
             </td>
           </tr>
@@ -61,17 +55,17 @@
     </div>
   </div>
 </div>
-
 {% else %}
 <div class="alert alert-info">
-  No rebalancing sessions saved yet.
-  Go to <a href="/" class="alert-link">Rebalance</a> and click
-  <strong>Save Rebalancing Recommendation</strong> to create one.
+  No sessions saved yet for {{ client.client_name }}.
+  Go to <a href="/client/{{ client.client_id }}" class="alert-link">Rebalance</a>
+  and click <strong>Save Rebalancing Recommendation</strong>.
 </div>
 {% endif %}
 
-<div class="mt-3">
-  <a href="/" class="btn btn-outline-primary">← Back to Rebalance</a>
+<div class="mt-3 d-flex gap-2">
+  <a href="/client/{{ client.client_id }}" class="btn btn-outline-primary">← Rebalance</a>
+  <a href="/" class="btn btn-outline-secondary">All Clients</a>
 </div>
 
 {% endblock %}
