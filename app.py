@@ -1,155 +1,113 @@
 """
-app.py  -  Portfolio Rebalancing Web App for Amit Sharma
-=========================================================
-Tech stack : Python · Flask · SQLite (raw SQL) · Jinja2 templates
-Database   : model_portfolio.db  (provided, pre-loaded — do NOT recreate)
+app.py  -  Portfolio Rebalancing Web App
+==========================================
+Supports all clients in the database.
+Home page shows a client selector; all other screens are per-client.
 
-Key schema facts (from the actual DB):
-  clients        → client_id TEXT ('C001'), client_name TEXT
-  model_funds    → fund_id, fund_name, asset_class, allocation_pct
-  client_holdings→ holding_id, client_id TEXT, fund_id, fund_name, current_value
-  rebalance_sessions → session_id INTEGER autoincrement, client_id TEXT, ...
-  rebalance_items    → item_id INTEGER autoincrement, session_id, ...
+Schema notes (from the actual model_portfolio.db):
+  clients         → client_id TEXT ('C001'), client_name TEXT, total_invested REAL
+  model_funds     → fund_id TEXT, fund_name TEXT, asset_class TEXT, allocation_pct REAL
+  client_holdings → holding_id INT, client_id TEXT, fund_id TEXT, fund_name TEXT, current_value REAL
+  rebalance_sessions → session_id INT autoincrement, client_id TEXT, created_at TEXT,
+                       portfolio_value, total_to_buy, total_to_sell, net_cash_needed, status TEXT
+  rebalance_items    → item_id INT autoincrement, session_id INT, fund_id TEXT, fund_name TEXT,
+                       action TEXT, amount REAL (NOT NULL), current_pct REAL (NOT NULL),
+                       target_pct REAL, post_rebalance_pct REAL, is_model_fund INT (NOT NULL)
 """
 
 import sqlite3
 import os
 from datetime import datetime
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, abort
 
 app = Flask(__name__)
-app.secret_key = "rebalance-amit-2024"
+app.secret_key = "rebalance-2024-multiuser"
 
-# ── Database path ─────────────────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH  = os.path.join(BASE_DIR, "model_portfolio.db")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  DATABASE HELPER
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+#  DB HELPER
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_db():
-    """
-    Open a SQLite connection with row_factory=sqlite3.Row so every row
-    can be accessed both by column name (row['fund_id']) and by index.
-    Caller must call conn.close() when done.
-    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  BUSINESS-LOGIC HELPERS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
+#  HELPERS
+# ─────────────────────────────────────────────────────────────────────────────
 
-def get_amit(conn):
-    """
-    Return Amit Sharma's row from the clients table.
-    client_id is a TEXT value like 'C001'.
-    """
-    row = conn.execute(
-        "SELECT client_id, client_name FROM clients WHERE client_name = 'Amit Sharma'"
+def get_all_clients(conn):
+    return conn.execute(
+        "SELECT client_id, client_name, total_invested FROM clients ORDER BY client_name"
+    ).fetchall()
+
+
+def get_client(conn, client_id):
+    """Fetch one client row; returns None if not found."""
+    return conn.execute(
+        "SELECT client_id, client_name, total_invested FROM clients WHERE client_id = ?",
+        (client_id,)
     ).fetchone()
-    if row is None:
-        raise ValueError("Amit Sharma not found in the clients table.")
-    return row          # row['client_id'] == 'C001'
 
 
 def calculate_rebalance(conn, client_id):
     """
-    Core rebalancing calculation for a given client_id.
+    Core rebalancing logic — works for any client_id.
 
-    Algorithm:
-      1. Fetch all model funds (the advisor's recommended plan).
-      2. Fetch all client holdings.
-      3. total_portfolio = sum of ALL current holdings (including non-model funds).
-      4. For each model fund:
-           current_value  = holding value (0 if not held)
-           current_pct    = current_value / total_portfolio * 100
-           target_pct     = allocation_pct from model_funds
-           drift          = target_pct - current_pct
-           action         = BUY if drift>0, SELL if drift<0, HOLD if drift==0
-           amount         = round(|drift| / 100 * total_portfolio)
-      5. Non-model holdings → REVIEW, no BUY/SELL amount.
-
-    Returns a dict with keys:
+    Returns dict:
       rows, total_portfolio, total_to_buy, total_to_sell, fresh_money_needed
     """
-
-    # ── 1. Model funds ──────────────────────────────────────────────────
+    # 1. Model funds
     model_rows = conn.execute(
         "SELECT fund_id, fund_name, asset_class, allocation_pct FROM model_funds"
     ).fetchall()
+    model_map = {r["fund_id"]: dict(r) for r in model_rows}
 
-    # Lookup dict: fund_id -> model fund info
-    model_map = {
-        r["fund_id"]: {
-            "fund_name":      r["fund_name"],
-            "asset_class":    r["asset_class"],
-            "allocation_pct": r["allocation_pct"],
-        }
-        for r in model_rows
-    }
-
-    # ── 2. Client holdings ──────────────────────────────────────────────
+    # 2. This client's holdings
     holding_rows = conn.execute(
-        "SELECT fund_id, fund_name, current_value "
-        "FROM client_holdings WHERE client_id = ?",
+        "SELECT fund_id, fund_name, current_value FROM client_holdings WHERE client_id = ?",
         (client_id,)
     ).fetchall()
+    holding_map = {r["fund_id"]: dict(r) for r in holding_rows}
 
-    # Lookup dict: fund_id -> holding row
-    holding_map = {r["fund_id"]: r for r in holding_rows}
-
-    # ── 3. Total portfolio value (ALL holdings, including non-model) ─────
+    # 3. Total portfolio = ALL holdings including non-model funds
     total_portfolio = sum(r["current_value"] for r in holding_rows)
 
-    # ── 4. Build comparison rows ────────────────────────────────────────
     rows = []
 
-    # 4a. Every model fund (whether or not Amit holds it)
+    # 4a. Model funds — BUY / SELL / HOLD
     for fund_id, mf in model_map.items():
         h = holding_map.get(fund_id)
         current_value = h["current_value"] if h else 0.0
         target_pct    = mf["allocation_pct"]
-
-        # current percentage of total portfolio
         current_pct   = (current_value / total_portfolio * 100) if total_portfolio else 0.0
-        current_pct_r = round(current_pct, 1)
 
-        # drift = how far we are from the target
-        drift   = target_pct - current_pct
-        drift_r = round(drift, 1)
-
-        # decide action
-        if drift > 0:
-            action = "BUY"
-        elif drift < 0:
-            action = "SELL"
-        else:
-            action = "HOLD"
-
-        # rupee amount to transact
-        amount = round(abs(drift) / 100 * total_portfolio) if action != "HOLD" else 0
+        # Use unrounded drift for the amount calculation (matches spec numbers exactly),
+        # then round for display.
+        drift         = target_pct - current_pct
+        action        = "BUY" if drift > 0 else ("SELL" if drift < 0 else "HOLD")
+        amount        = round(abs(drift) / 100 * total_portfolio) if action != "HOLD" else 0
 
         rows.append({
             "fund_id":            fund_id,
             "fund_name":          mf["fund_name"],
             "asset_class":        mf["asset_class"],
             "current_value":      current_value,
-            "current_pct":        current_pct_r,
+            "current_pct":        round(current_pct, 1),
             "target_pct":         target_pct,
-            "drift":              drift_r,
+            "drift":              round(drift, 1),
             "action":             action,
             "amount":             amount,
             "is_model_fund":      1,
-            # after rebalancing this fund will be exactly at target
             "post_rebalance_pct": target_pct,
         })
 
-    # 4b. Non-model fund holdings → REVIEW
+    # 4b. Non-model holdings → REVIEW
     for fund_id, h in holding_map.items():
         if fund_id not in model_map:
             cv          = h["current_value"]
@@ -160,15 +118,14 @@ def calculate_rebalance(conn, client_id):
                 "asset_class":        "—",
                 "current_value":      cv,
                 "current_pct":        round(current_pct, 1),
-                "target_pct":         None,   # no target for non-model (nullable in DB)
-                "drift":              None,   # display only — not saved
+                "target_pct":         None,
+                "drift":              None,
                 "action":             "REVIEW",
-                "amount":             0,      # DB has NOT NULL on amount — use 0 for REVIEW
+                "amount":             0,      # NOT NULL in DB; 0 for REVIEW
                 "is_model_fund":      0,
-                "post_rebalance_pct": None,   # nullable in DB
+                "post_rebalance_pct": None,
             })
 
-    # ── 5. Summary totals ────────────────────────────────────────────────
     total_to_buy       = sum(r["amount"] for r in rows if r["action"] == "BUY")
     total_to_sell      = sum(r["amount"] for r in rows if r["action"] == "SELL")
     fresh_money_needed = total_to_buy - total_to_sell
@@ -182,206 +139,160 @@ def calculate_rebalance(conn, client_id):
     }
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 #  ROUTES
-# ═══════════════════════════════════════════════════════════════════════════════
+# ─────────────────────────────────────────────────────────────────────────────
 
-# ── 1. Main comparison screen ─────────────────────────────────────────────────
+# ── Home — client selector ────────────────────────────────────────────────────
 @app.route("/")
-def index():
-    conn = get_db()
-    try:
-        amit        = get_amit(conn)
-        client_id   = amit["client_id"]     # 'C001'
-        client_name = amit["client_name"]
-        data        = calculate_rebalance(conn, client_id)
-    except Exception as e:
-        conn.close()
-        return f"<h2 style='color:red'>Error: {e}</h2>", 500
+def home():
+    conn    = get_db()
+    clients = get_all_clients(conn)
     conn.close()
-    return render_template("index.html", client_name=client_name, **data)
+    return render_template("home.html", clients=clients)
 
 
-# ── 2. Save recommendation (POST only) ───────────────────────────────────────
-@app.route("/save", methods=["POST"])
-def save():
-    conn = get_db()
+# ── Rebalance screen for one client ──────────────────────────────────────────
+@app.route("/client/<client_id>")
+def index(client_id):
+    conn   = get_db()
+    client = get_client(conn, client_id)
+    if client is None:
+        conn.close()
+        abort(404)
+    data = calculate_rebalance(conn, client_id)
+    conn.close()
+    return render_template("index.html", client=client, **data)
+
+
+# ── Save recommendation ───────────────────────────────────────────────────────
+@app.route("/client/<client_id>/save", methods=["POST"])
+def save(client_id):
+    conn   = get_db()
+    client = get_client(conn, client_id)
+    if client is None:
+        conn.close()
+        abort(404)
     try:
-        amit      = get_amit(conn)
-        client_id = amit["client_id"]
-        data      = calculate_rebalance(conn, client_id)
+        data = calculate_rebalance(conn, client_id)
+        now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        # Insert one summary row into rebalance_sessions
         cursor = conn.execute(
-            """
-            INSERT INTO rebalance_sessions
-                (client_id, created_at, portfolio_value,
-                 total_to_buy, total_to_sell, net_cash_needed, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'PENDING')
-            """,
-            (
-                client_id,
-                now,
-                data["total_portfolio"],
-                data["total_to_buy"],
-                data["total_to_sell"],
-                data["fresh_money_needed"],
-            )
+            """INSERT INTO rebalance_sessions
+               (client_id, created_at, portfolio_value, total_to_buy,
+                total_to_sell, net_cash_needed, status)
+               VALUES (?, ?, ?, ?, ?, ?, 'PENDING')""",
+            (client_id, now, data["total_portfolio"],
+             data["total_to_buy"], data["total_to_sell"], data["fresh_money_needed"])
         )
-        session_id = cursor.lastrowid   # SQLite auto-generated INTEGER
+        session_id = cursor.lastrowid
 
-        # Insert one detail row per fund into rebalance_items
         for row in data["rows"]:
             conn.execute(
-                """
-                INSERT INTO rebalance_items
-                    (session_id, fund_id, fund_name, action, amount,
-                     current_pct, target_pct, post_rebalance_pct, is_model_fund)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    session_id,
-                    row["fund_id"],
-                    row["fund_name"],
-                    row["action"],
-                    row["amount"],           # None for REVIEW rows
-                    row["current_pct"],
-                    row["target_pct"],       # None for REVIEW rows
-                    row["post_rebalance_pct"],  # None for REVIEW rows
-                    row["is_model_fund"],
-                )
+                """INSERT INTO rebalance_items
+                   (session_id, fund_id, fund_name, action, amount,
+                    current_pct, target_pct, post_rebalance_pct, is_model_fund)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (session_id, row["fund_id"], row["fund_name"], row["action"],
+                 row["amount"], row["current_pct"], row["target_pct"],
+                 row["post_rebalance_pct"], row["is_model_fund"])
             )
 
         conn.commit()
-        flash(f"✅ Recommendation saved! Session ID: {session_id}", "success")
+        flash(f"✅ Recommendation saved! Session #{session_id}", "success")
 
     except Exception as e:
         conn.rollback()
-        flash(f"❌ Error saving recommendation: {e}", "danger")
+        flash(f"❌ Error: {e}", "danger")
     finally:
         conn.close()
 
-    return redirect(url_for("index"))
+    return redirect(url_for("index", client_id=client_id))
 
 
-# ── 3. Current holdings screen ────────────────────────────────────────────────
-@app.route("/holdings")
-def holdings():
-    conn = get_db()
-    try:
-        amit        = get_amit(conn)
-        client_id   = amit["client_id"]
-        client_name = amit["client_name"]
-
-        rows = conn.execute(
-            """
-            SELECT fund_id, fund_name, current_value
-            FROM client_holdings
-            WHERE client_id = ?
-            ORDER BY current_value DESC
-            """,
-            (client_id,)
-        ).fetchall()
-
-        total_value = sum(r["current_value"] for r in rows)
-
-    except Exception as e:
+# ── Current holdings ──────────────────────────────────────────────────────────
+@app.route("/client/<client_id>/holdings")
+def holdings(client_id):
+    conn   = get_db()
+    client = get_client(conn, client_id)
+    if client is None:
         conn.close()
-        return f"<h2 style='color:red'>Error: {e}</h2>", 500
+        abort(404)
+
+    rows = conn.execute(
+        "SELECT fund_id, fund_name, current_value FROM client_holdings "
+        "WHERE client_id = ? ORDER BY current_value DESC",
+        (client_id,)
+    ).fetchall()
+
+    total_value = sum(r["current_value"] for r in rows)
+    conn.close()
+    return render_template("holdings.html", client=client, rows=rows, total_value=total_value)
+
+
+# ── Rebalance history ─────────────────────────────────────────────────────────
+@app.route("/client/<client_id>/history")
+def history(client_id):
+    conn   = get_db()
+    client = get_client(conn, client_id)
+    if client is None:
+        conn.close()
+        abort(404)
+
+    sessions = conn.execute(
+        """SELECT session_id, created_at, portfolio_value, total_to_buy,
+                  total_to_sell, net_cash_needed, status
+           FROM rebalance_sessions
+           WHERE client_id = ? ORDER BY created_at DESC""",
+        (client_id,)
+    ).fetchall()
 
     conn.close()
-    return render_template("holdings.html",
-                           rows=rows,
-                           total_value=total_value,
-                           client_name=client_name)
+    return render_template("history.html", client=client, sessions=sessions)
 
 
-# ── 4. Rebalance history screen ───────────────────────────────────────────────
-@app.route("/history")
-def history():
-    conn = get_db()
-    try:
-        amit        = get_amit(conn)
-        client_id   = amit["client_id"]
-        client_name = amit["client_name"]
-
-        sessions = conn.execute(
-            """
-            SELECT session_id, created_at, portfolio_value,
-                   total_to_buy, total_to_sell, net_cash_needed, status
-            FROM rebalance_sessions
-            WHERE client_id = ?
-            ORDER BY created_at DESC
-            """,
-            (client_id,)
-        ).fetchall()
-
-    except Exception as e:
+# ── Session detail ────────────────────────────────────────────────────────────
+@app.route("/client/<client_id>/history/<int:session_id>")
+def session_detail(client_id, session_id):
+    conn   = get_db()
+    client = get_client(conn, client_id)
+    if client is None:
         conn.close()
-        return f"<h2 style='color:red'>Error: {e}</h2>", 500
+        abort(404)
+
+    session = conn.execute(
+        "SELECT * FROM rebalance_sessions WHERE session_id = ? AND client_id = ?",
+        (session_id, client_id)
+    ).fetchone()
+
+    if session is None:
+        conn.close()
+        abort(404)
+
+    items = conn.execute(
+        "SELECT * FROM rebalance_items WHERE session_id = ?",
+        (session_id,)
+    ).fetchall()
 
     conn.close()
-    return render_template("history.html",
-                           sessions=sessions,
-                           client_name=client_name)
+    return render_template("session_detail.html", client=client, session=session, items=items)
 
 
-# ── 5. Session detail screen ──────────────────────────────────────────────────
-@app.route("/history/<int:session_id>")
-def session_detail(session_id):
-    conn = get_db()
-    try:
-        amit      = get_amit(conn)
-        client_id = amit["client_id"]
-
-        # Make sure this session belongs to Amit
-        session = conn.execute(
-            "SELECT * FROM rebalance_sessions "
-            "WHERE session_id = ? AND client_id = ?",
-            (session_id, client_id)
-        ).fetchone()
-
-        if session is None:
-            conn.close()
-            return "<h2>Session not found or access denied.</h2>", 404
-
-        items = conn.execute(
-            "SELECT * FROM rebalance_items WHERE session_id = ?",
-            (session_id,)
-        ).fetchall()
-
-    except Exception as e:
-        conn.close()
-        return f"<h2 style='color:red'>Error: {e}</h2>", 500
-
-    conn.close()
-    return render_template("session_detail.html",
-                           session=session,
-                           items=items,
-                           client_name=amit["client_name"])
-
-
-# ── 6. Edit model portfolio ───────────────────────────────────────────────────
+# ── Edit model portfolio ──────────────────────────────────────────────────────
 @app.route("/edit-plan", methods=["GET", "POST"])
 def edit_plan():
     conn = get_db()
 
     if request.method == "POST":
-        funds = conn.execute(
-            "SELECT fund_id, fund_name FROM model_funds"
-        ).fetchall()
-
+        funds       = conn.execute("SELECT fund_id, fund_name FROM model_funds").fetchall()
         updates     = []
         total_alloc = 0.0
         error       = None
 
         try:
             for fund in funds:
-                fid   = fund["fund_id"]
-                value = request.form.get(f"alloc_{fid}", "").strip()
-                pct   = float(value)
+                fid = fund["fund_id"]
+                pct = float(request.form.get(f"alloc_{fid}", "").strip())
                 if pct < 0:
                     error = f"Allocation for {fid} cannot be negative."
                     break
@@ -390,35 +301,25 @@ def edit_plan():
         except (ValueError, TypeError):
             error = "All fields must be valid numbers."
 
-        # Enforce that allocations sum to exactly 100%
         if error is None and abs(total_alloc - 100.0) > 0.001:
-            error = (
-                f"Allocations must add up to exactly 100%. "
-                f"Your total is currently {round(total_alloc, 2)}%."
-            )
+            error = (f"Allocations must total exactly 100%. "
+                     f"Yours total {round(total_alloc, 2)}%.")
 
         if error:
             model_funds = conn.execute(
                 "SELECT fund_id, fund_name, asset_class, allocation_pct FROM model_funds"
             ).fetchall()
             conn.close()
-            return render_template("edit_plan.html",
-                                   model_funds=model_funds,
-                                   error=error)
+            return render_template("edit_plan.html", model_funds=model_funds, error=error)
 
-        # Save new allocations
         for (pct, fid) in updates:
-            conn.execute(
-                "UPDATE model_funds SET allocation_pct = ? WHERE fund_id = ?",
-                (pct, fid)
-            )
+            conn.execute("UPDATE model_funds SET allocation_pct = ? WHERE fund_id = ?", (pct, fid))
         conn.commit()
         conn.close()
 
-        flash("✅ Model portfolio updated! Rebalancing recalculated below.", "success")
-        return redirect(url_for("index"))
+        flash("✅ Model portfolio updated! All client views now use the new allocations.", "success")
+        return redirect(url_for("home"))
 
-    # GET – show current allocations
     model_funds = conn.execute(
         "SELECT fund_id, fund_name, asset_class, allocation_pct FROM model_funds"
     ).fetchall()
@@ -426,9 +327,6 @@ def edit_plan():
     return render_template("edit_plan.html", model_funds=model_funds, error=None)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  ENTRY POINT
-# ═══════════════════════════════════════════════════════════════════════════════
-
+# ─────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
