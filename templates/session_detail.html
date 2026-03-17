@@ -1,24 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Session #{{ session.session_id }}{% endblock %}
+{% block title %}Session #{{ session.session_id }} – {{ client.client_name }}{% endblock %}
 
 {% block content %}
 
 <h2 class="mb-1">Session #{{ session.session_id }}</h2>
 <p class="text-muted mb-4">
-  Client: <strong>{{ client_name }}</strong> &nbsp;·&nbsp;
-  Saved on <strong>{{ session.created_at }}</strong> &nbsp;·&nbsp;
-  Status: <span class="badge bg-primary">{{ session.status }}</span>
+  Client: <strong>{{ client.client_name }}</strong>
+  <span class="badge bg-secondary ms-1">{{ client.client_id }}</span>
+  &nbsp;·&nbsp; Saved on <strong>{{ session.created_at }}</strong>
+  &nbsp;·&nbsp; <span class="badge bg-primary">{{ session.status }}</span>
 </p>
 
-<!-- Session summary cards -->
 <div class="row g-3 mb-4">
   <div class="col-6 col-md-3">
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body text-center">
         <div class="summary-label">Portfolio Value</div>
-        <div class="summary-amount text-dark">
-          ₹{{ "{:,.0f}".format(session.portfolio_value) }}
-        </div>
+        <div class="summary-amount text-dark">₹{{ "{:,.0f}".format(session.portfolio_value) }}</div>
       </div>
     </div>
   </div>
@@ -26,9 +24,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body text-center">
         <div class="summary-label">Total Buy</div>
-        <div class="summary-amount text-success">
-          ₹{{ "{:,.0f}".format(session.total_to_buy) }}
-        </div>
+        <div class="summary-amount text-success">₹{{ "{:,.0f}".format(session.total_to_buy) }}</div>
       </div>
     </div>
   </div>
@@ -36,9 +32,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body text-center">
         <div class="summary-label">Total Sell</div>
-        <div class="summary-amount text-danger">
-          ₹{{ "{:,.0f}".format(session.total_to_sell) }}
-        </div>
+        <div class="summary-amount text-danger">₹{{ "{:,.0f}".format(session.total_to_sell) }}</div>
       </div>
     </div>
   </div>
@@ -46,8 +40,7 @@
     <div class="card shadow-sm border-0 h-100">
       <div class="card-body text-center">
         <div class="summary-label">Net Cash Needed</div>
-        <div class="summary-amount
-          {% if session.net_cash_needed > 0 %}text-warning{% else %}text-success{% endif %}">
+        <div class="summary-amount {% if session.net_cash_needed > 0 %}text-warning{% else %}text-success{% endif %}">
           ₹{{ "{:,.0f}".format(session.net_cash_needed) }}
         </div>
       </div>
@@ -55,7 +48,6 @@
   </div>
 </div>
 
-<!-- Items table -->
 <div class="card shadow-sm border-0">
   <div class="card-header bg-white fw-semibold fs-5">Fund-by-Fund Breakdown</div>
   <div class="card-body p-0">
@@ -74,35 +66,22 @@
         </thead>
         <tbody>
           {% for item in items %}
-          <tr class="
-            {% if item.action == 'BUY' %}row-buy
-            {% elif item.action == 'SELL' %}row-sell
-            {% elif item.action == 'REVIEW' %}row-review
-            {% endif %}
-          ">
+          <tr class="{% if item.action == 'BUY' %}row-buy{% elif item.action == 'SELL' %}row-sell{% elif item.action == 'REVIEW' %}row-review{% endif %}">
             <td><code>{{ item.fund_id }}</code></td>
             <td>{{ item.fund_name }}</td>
             <td class="text-center">
-              {% if item.action == 'BUY' %}
-                <span class="badge bg-success">BUY</span>
-              {% elif item.action == 'SELL' %}
-                <span class="badge bg-danger">SELL</span>
-              {% elif item.action == 'HOLD' %}
-                <span class="badge bg-secondary">HOLD</span>
-              {% elif item.action == 'REVIEW' %}
-                <span class="badge bg-warning text-dark">REVIEW</span>
+              {% if item.action == 'BUY' %}<span class="badge bg-success">BUY</span>
+              {% elif item.action == 'SELL' %}<span class="badge bg-danger">SELL</span>
+              {% elif item.action == 'HOLD' %}<span class="badge bg-secondary">HOLD</span>
+              {% elif item.action == 'REVIEW' %}<span class="badge bg-warning text-dark">REVIEW</span>
               {% endif %}
             </td>
             <td class="text-end fw-semibold">
-              {% if item.amount %}₹{{ "{:,.0f}".format(item.amount) }}{% else %}—{% endif %}
+              {% if item.amount and item.amount > 0 %}₹{{ "{:,.0f}".format(item.amount) }}{% else %}—{% endif %}
             </td>
             <td class="text-end">{{ item.current_pct }}%</td>
-            <td class="text-end">
-              {% if item.target_pct %}{{ item.target_pct }}%{% else %}—{% endif %}
-            </td>
-            <td class="text-end">
-              {% if item.post_rebalance_pct %}{{ item.post_rebalance_pct }}%{% else %}—{% endif %}
-            </td>
+            <td class="text-end">{% if item.target_pct %}{{ item.target_pct }}%{% else %}—{% endif %}</td>
+            <td class="text-end">{% if item.post_rebalance_pct %}{{ item.post_rebalance_pct }}%{% else %}—{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
@@ -112,8 +91,9 @@
 </div>
 
 <div class="mt-3 d-flex gap-2">
-  <a href="/history" class="btn btn-outline-secondary">← Back to History</a>
-  <a href="/" class="btn btn-outline-primary">Rebalance</a>
+  <a href="/client/{{ client.client_id }}/history" class="btn btn-outline-secondary">← History</a>
+  <a href="/client/{{ client.client_id }}" class="btn btn-outline-primary">Rebalance</a>
+  <a href="/" class="btn btn-outline-secondary">All Clients</a>
 </div>
 
 {% endblock %}
