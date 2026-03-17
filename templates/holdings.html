@@ -1,20 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Holdings - {{ client_name }}{% endblock %}
+{% block title %}Holdings - {{ client.client_name }}{% endblock %}
 
 {% block content %}
 
 <h2 class="mb-1">Current Investments</h2>
-<p class="text-muted mb-4">Client: <strong>{{ client_name }}</strong></p>
+<p class="text-muted mb-4">
+  Client: <strong>{{ client.client_name }}</strong>
+  <span class="badge bg-secondary ms-1">{{ client.client_id }}</span>
+</p>
 
-<!-- Portfolio value card -->
 <div class="row mb-4">
   <div class="col-md-4">
     <div class="card shadow-sm border-0">
       <div class="card-body text-center">
         <div class="summary-label">Total Portfolio Value</div>
-        <div class="summary-amount text-dark">
-          ₹{{ "{:,.0f}".format(total_value) }}
-        </div>
+        <div class="summary-amount text-dark">₹{{ "{:,.0f}".format(total_value) }}</div>
       </div>
     </div>
   </div>
@@ -42,11 +42,8 @@
             <td>{{ row.fund_name }}</td>
             <td class="text-end fw-semibold">₹{{ "{:,.0f}".format(row.current_value) }}</td>
             <td class="text-end">
-              {% if total_value > 0 %}
-                {{ "%.1f"|format(row.current_value / total_value * 100) }}%
-              {% else %}
-                0.0%
-              {% endif %}
+              {% if total_value > 0 %}{{ "%.1f"|format(row.current_value / total_value * 100) }}%
+              {% else %}0.0%{% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -63,8 +60,9 @@
   </div>
 </div>
 
-<div class="mt-3">
-  <a href="/" class="btn btn-outline-primary">← Back to Rebalance</a>
+<div class="mt-3 d-flex gap-2">
+  <a href="/client/{{ client.client_id }}" class="btn btn-outline-primary">← Rebalance</a>
+  <a href="/" class="btn btn-outline-secondary">All Clients</a>
 </div>
 
 {% endblock %}
