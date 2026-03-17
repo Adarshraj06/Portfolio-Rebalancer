@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Portfolio Rebalancer — Select Client{% endblock %}
+
+{% block content %}
+
+<div class="text-center mb-5 mt-3">
+  <h1 class="fw-bold">📊 Portfolio Rebalancer</h1>
+  <p class="text-muted fs-5">Wealth Builder 2026 · Model Portfolio</p>
+</div>
+
+<div class="row justify-content-center g-4">
+  {% for c in clients %}
+  <div class="col-md-4">
+    <div class="card shadow-sm border-0 client-card h-100">
+      <div class="card-body d-flex flex-column align-items-center text-center py-4">
+
+        <!-- Avatar circle -->
+        <div class="client-avatar mb-3">
+          {{ c.client_name[0] }}
+        </div>
+
+        <h4 class="fw-bold mb-0">{{ c.client_name }}</h4>
+        <p class="text-muted small mb-1">ID: {{ c.client_id }}</p>
+        <p class="text-muted small mb-3">
+          Invested: <strong>₹{{ "{:,.0f}".format(c.total_invested) }}</strong>
+        </p>
+
+        <a href="/client/{{ c.client_id }}" class="btn btn-primary w-100 mb-2">
+          View Rebalance
+        </a>
+        <div class="d-flex gap-2 w-100">
+          <a href="/client/{{ c.client_id }}/holdings"
+             class="btn btn-outline-secondary btn-sm flex-fill">Holdings</a>
+          <a href="/client/{{ c.client_id }}/history"
+             class="btn btn-outline-secondary btn-sm flex-fill">History</a>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="text-center mt-5">
+  <a href="/edit-plan" class="btn btn-outline-dark">
+    ✏️ Edit Model Portfolio Plan
+  </a>
+  <p class="text-muted small mt-2">
+    Changes to the plan affect all clients' rebalancing calculations.
+  </p>
+</div>
+
+{% endblock %}
