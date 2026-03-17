@@ -21,16 +21,22 @@
       <ul class="navbar-nav ms-auto">
         <li class="nav-item">
           <a class="nav-link {% if request.path == '/' %}active{% endif %}"
-             href="/">Rebalance</a>
+             href="/">All Clients</a>
+        </li>
+        {% if client is defined and client %}
+        <li class="nav-item">
+          <a class="nav-link {% if '/client/' in request.path and '/holdings' not in request.path and '/history' not in request.path %}active{% endif %}"
+             href="/client/{{ client.client_id }}">Rebalance</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.path == '/holdings' %}active{% endif %}"
-             href="/holdings">Holdings</a>
+          <a class="nav-link {% if '/holdings' in request.path %}active{% endif %}"
+             href="/client/{{ client.client_id }}/holdings">Holdings</a>
         </li>
         <li class="nav-item">
-          <a class="nav-link {% if request.path == '/history' %}active{% endif %}"
-             href="/history">History</a>
+          <a class="nav-link {% if '/history' in request.path %}active{% endif %}"
+             href="/client/{{ client.client_id }}/history">History</a>
         </li>
+        {% endif %}
         <li class="nav-item">
           <a class="nav-link {% if request.path == '/edit-plan' %}active{% endif %}"
              href="/edit-plan">Edit Plan</a>
@@ -59,7 +65,7 @@
 </main>
 
 <footer class="text-center text-muted py-3 border-top mt-5">
-  <small>Portfolio Rebalancer &nbsp;|&nbsp; Wealth Builder 2026</small>
+  <small>Portfolio Rebalancer &nbsp;|&nbsp; Wealth Builder 2025</small>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
